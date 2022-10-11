@@ -1,11 +1,10 @@
 import os
 import requests
-from time import time
+import time
 import logging
 from logging.handlers import RotatingFileHandler
 
 from telegram import Bot
-from telegram.ext import MessageHandler
 
 from http import HTTPStatus
 
@@ -23,41 +22,43 @@ RETRY_TIME = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
-
 HOMEWORK_STATUSES = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 handler = RotatingFileHandler('main.log', maxBytes=50000000, backupCount=1)
 formatter = logging.Formatter(
     '%(asctime)s, %(lineno)s, [%(levelname)s], %(message)s'
 )
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 logger.addHandler(handler)
-logger.setFormatter(formatter)
+handler.setFormatter(formatter)
 
 
 def send_message(bot, message):
     """отправка итогового сообщения со всей информацией"""
-    pass
+    text = (f'Имя: {message['homework_name']}'
+            f'Статус: {message}'
+            f'Комментарий: {message}')
+
+    bot.send_message(TELEGRAM_CHAT_ID, text)
 
 
 def get_api_answer(current_timestamp):
     """Получение ответа от API"""
-    timestamp = current_timestamp or int(time.time())
-    params = {'from_date': timestamp}
-    response = requests.get(ENDPOINT, headers=HEADERS, params=params).json()
+    params = {'from_date': current_timestamp}
+    response = requests.get(ENDPOINT, headers=HEADERS, params=params)
 
-    return response[0]
+    return response
 
 
 def check_response(response):
     """Проверка запроса к API"""
     if response.status_code == HTTPStatus.OK:
-        return response
+        return response.json()
 
     logging.error('Сбой в проверке запроса')
 
@@ -90,22 +91,21 @@ def main():
     check_tokens()
 
     bot = Bot(token=TELEGRAM_TOKEN)
-    current_timestamp = int(time())
+    current_timestamp = 0
 
     while True:
         try:
-            response = get_api_answer(current_timestamp)
-            check_response(response)
-
-            current_timestamp = int(time())
+            response = check_response(get_api_answer(current_timestamp))
+            current_timestamp = int(time.time())
+            parse_status(response['homeworks'][0])
+            message = response['homeworks'][0]
+            send_message(bot, message)
             time.sleep(RETRY_TIME)
-
         except Exception as error:
-            message = f'Сбой в работе программы: {error}'
-            logger.error(error, message)
+            logger.error(error, f'Сбой в работе программы: {error}')
+            message = f'сбой в программе {error}'
+            send_message(bot, message)
             time.sleep(RETRY_TIME)
-        else:
-            
 
 
 if __name__ == '__main__':
