@@ -100,13 +100,12 @@ def main() -> None:
     """Основная логика работы бота."""
     if check_tokens():
         bot = Bot(token=TELEGRAM_TOKEN)
-        current_timestamp = int(0)
+        current_timestamp = int(time.time())
         status = None
 
         while True:
             try:
                 response = get_api_answer(current_timestamp)
-                print(response)
                 homework = check_response(response)[0]
                 new_status = parse_status(homework)
 
@@ -120,7 +119,7 @@ def main() -> None:
 
                     send_message(bot, message)
 
-                current_timestamp = int(0)
+                current_timestamp = int(time.time())
                 time.sleep(RETRY_TIME)
             except Exception as error:
                 logging.error(error, f'Сбой в работе программы: {error}')
