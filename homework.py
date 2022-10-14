@@ -90,7 +90,7 @@ def parse_status(homework: json) -> str:
 def send_message(bot: Bot, message: Dict) -> None:
     """Отправка итогового сообщения со всей информацией."""
     try:
-        # bot.send_message(TELEGRAM_CHAT_ID, text=message)
+        bot.send_message(TELEGRAM_CHAT_ID, text=message)
         logging.info('СОобщение успешно отправлено')
     except Exception as error:
         logging.error(error, 'Cообщение не было отправлено.')
