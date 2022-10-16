@@ -1,3 +1,5 @@
+import sys
+
 from http import HTTPStatus
 import json
 import os
@@ -18,27 +20,24 @@ load_dotenv()
 
 PRACTICUM_TOKEN = os.getenv('TOKEN_YANDEX')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
-TELEGRAM_CHAT_ID = os.getenv('CHAT_ID')
+TELEGRAM_CHAT_ID = os.getenv('a')
 
 RETRY_TIME = 600
-ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
+ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_status/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
-HOMEWORK_STATUSES = {
+HOMEWORK_STATES = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
-logging.basicConfig(level=logging.INFO, filename='main.log', filemode='w')
-
 
 def check_tokens() -> bool:
     """Проверка всех токенов на валидность."""
-    if (TELEGRAM_CHAT_ID is None
-            or TELEGRAM_TOKEN is None or PRACTICUM_TOKEN is None):
+    if globals().get('TELEGRAM_CHAT_ID') is None:
         logging.critical('Токены не валидны.')
-        return False
+        sys.exit()
 
     return True
 
@@ -79,10 +78,10 @@ def parse_status(homework: json) -> str:
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
 
-    if homework_status not in HOMEWORK_STATUSES:
+    if homework_status not in HOMEWORK_STATES:
         logging.error('Получен неизвестный статус')
         raise KeyError('Такого статуса не сйществует')
-    verdict = HOMEWORK_STATUSES.get(homework_status)
+    verdict = HOMEWORK_STATES.get(homework_status)
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
@@ -91,41 +90,46 @@ def send_message(bot: Bot, message: Dict) -> None:
     """Отправка итогового сообщения со всей информацией."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, text=message)
-        logging.info('СОобщение успешно отправлено')
+        logging.info('СОобщение успешно. отправлено')
     except Exception as error:
         logging.error(error, 'Cообщение не было отправлено.')
 
 
 def main() -> None:
     """Основная логика работы бота."""
-    if check_tokens():
-        bot = Bot(token=TELEGRAM_TOKEN)
-        current_timestamp = int(time.time())
-        status = None
+    logging.basicConfig(
+        level=logging.INFO,
+        filename='./main.log',
+        filemode='w'
+    )
 
-        while True:
-            try:
-                response = get_api_answer(current_timestamp)
-                homework = check_response(response)[0]
-                new_status = parse_status(homework)
+    bot = Bot(token=TELEGRAM_TOKEN)
+    current_timestamp = int(0)
+    status = None
 
-                if status != new_status:
-                    status = new_status
-                    message = (
-                        f'{status}',
-                        f'Статус: {homework.get("status")}',
-                        f'Комментарий: {homework.get("reviewer_comment")}'
-                    )
+    while True:
+        try:
+            response = get_api_answer(current_timestamp)
+            homework = check_response(response)[0]
+            new_status = parse_status(homework)
 
-                    send_message(bot, message)
+            if status != new_status:
+                status = new_status
+                message = (
+                    f'{status}',
+                    f'Статус: {homework.get("status")}',
+                    f'Комментарий: {homework.get("reviewer_comment")}'
+                )
 
-                current_timestamp = int(time.time())
-                time.sleep(RETRY_TIME)
-            except Exception as error:
-                logging.error(error, f'Сбой в работе программы: {error}')
-                message = f'сбой в программе {error}'
-                send_message(bot, message, status)
-                time.sleep(RETRY_TIME)
+                send_message(bot, message)
+
+            current_timestamp = int(0)
+            time.sleep(RETRY_TIME)
+        except Exception as error:
+            logging.error(error, f'Сбой в работе программы: {error}')
+            message = f'сбой в программе {error}'
+            send_message(bot, message)
+            time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
