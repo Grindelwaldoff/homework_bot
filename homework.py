@@ -89,6 +89,16 @@ def parse_status(homework: json) -> str:
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
+def emoji(status: str) -> str:
+    """Возвращает для каждого статуса свой смайлик."""
+    emojis = {
+        'approved': '\U0001F4C8',
+        'reviewing': '\U0001F50D',
+        'rejected': '\U0001F6A8'
+    }
+    return emojis[status]
+
+
 def send_message(bot: Bot, message: Dict) -> None:
     """Отправка итогового сообщения со всей информацией."""
     try:
@@ -120,17 +130,18 @@ def main() -> None:
             if status != new_status:
                 status = new_status
                 message = (
-                    f'{status}',
-                    f'Статус: {homework.get("status")}',
-                    f'Комментарий: {homework.get("reviewer_comment")}'
+                    f'{status} {emoji(homework["status"])} \n'
+                    f'Статус: {homework.get("status")} \U0001F6A9 \n'
+                    'Комментарий:'
+                    f'{homework.get("reviewer_comment")} \U0001F4DC'
                 )
 
                 send_message(bot, message)
 
-            current_timestamp = int(0)
+            current_timestamp = int(homework['current_date'])
         except TelegramError as error:
             logging.error(TelegramError, f'Сбой в работе программы: {error}')
-            send_message(bot, f'Cбой в программе {error}')
+            send_message(bot, f'Cбой в программе {error} \U0001F4CC')
             logging.info('Сообщение ошибке успешно отправлено.')
         except KeyError:
             logging.error(KeyError)
