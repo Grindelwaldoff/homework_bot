@@ -1,23 +1,21 @@
-import sys
-
-from http import HTTPStatus
-import json
 import os
-from typing import Dict, List
-from urllib.error import HTTPError
-import requests
+import sys
 import time
 import logging
+import json
+from typing import Dict, List
 
-from telegram import Bot, TelegramError
-
+import requests
+from http import HTTPStatus
+from telegram import Bot
 from dotenv import load_dotenv
 
-from exceptions import IncorrectApiResponse
+from exceptions import (
+    JSONEncodeError, IncorrectApiResponse, HTTPError, TelegramError
+)
 
 
 load_dotenv()
-
 
 PRACTICUM_TOKEN = os.getenv('TOKEN_YANDEX')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -34,14 +32,22 @@ HOMEWORK_STATES = {
 }
 
 
+# gut
 def check_tokens() -> bool:
     """Проверка всех токенов на валидность."""
-    if (
-        globals()['PRACTICUM_TOKEN'] is None
-        or globals()['TELEGRAM_CHAT_ID'] is None
-        or globals()['TELEGRAM_TOKEN'] is None
-    ):
-        return False
+    check_list = {
+        'PRACTICUM_TOKEN': PRACTICUM_TOKEN,
+        'TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID,
+        'TELEGRAM_TOKEN': TELEGRAM_TOKEN
+    }
+    res = ''
+
+    if not all(check_list.values()):
+        for key, value in check_list.items():
+            if value is None:
+                res += ' ' + key
+
+        raise ValueError(f'Токен/ы {res} не задан/ы.')
 
     return True
 
@@ -52,7 +58,7 @@ def get_api_answer(current_timestamp: int) -> Dict:
     response = requests.get(ENDPOINT, headers=HEADERS, params=params)
 
     if response.status_code != HTTPStatus.OK:
-        raise ConnectionRefusedError('Запрос не удался')
+        raise HTTPError('Запрос не удался')
 
     return response.json()
 
@@ -71,7 +77,9 @@ def check_response(response: Dict) -> List[dict]:
         )
 
     if not isinstance(response['homeworks'], List):
-        raise IncorrectApiResponse('Под ключом homeworks не список')
+        raise IncorrectApiResponse(
+            'Под ключом homeworks не список'
+        )
 
     return response['homeworks']
 
@@ -82,7 +90,7 @@ def parse_status(homework: json) -> str:
     homework_status = homework.get('status')
 
     if homework_status not in HOMEWORK_STATES:
-        raise KeyError('Такого статуса не сйществует')
+        raise KeyError('Такого статуса не существует')
 
     verdict = HOMEWORK_STATES.get(homework_status)
 
@@ -102,27 +110,34 @@ def emoji(status: str) -> str:
 def send_message(bot: Bot, message: Dict) -> None:
     """Отправка итогового сообщения со всей информацией."""
     try:
-        bot.send_message(TELEGRAM_CHAT_ID, text=message)
+        # bot.send_message(TELEGRAM_CHAT_ID, text=message)
+        print('Все ок')
+        logging.info('Сообщение отправлено.')
     except TelegramError:
         raise TelegramError('В ответе содержатся неизвестные символы.')
 
 
+# gut
 def main() -> None:
     """Основная логика работы бота."""
     logging.basicConfig(
         level=logging.INFO,
         filename='./main.log',
-        filemode='w'
+        filemode='w',
+        format=(
+            'line:%(lineno)s \n'
+            'time:%(asctime)s \n'
+            'status:%(levelname)s \n'
+            'info:%(message)s \n')
     )
 
+    check_tokens()
     bot = Bot(token=TELEGRAM_TOKEN)
-    current_timestamp = int(0)
+    current_timestamp = int(time.time())
     status = None
 
     while True:
         try:
-            if not check_tokens():
-                raise ValueError('Какой-то из токенов потерялся')
             response = get_api_answer(current_timestamp)
             homework = check_response(response)[0]
             new_status = parse_status(homework)
@@ -136,24 +151,20 @@ def main() -> None:
                     f'{homework.get("reviewer_comment")} \U0001F4DC'
                 )
 
-                send_message(bot, message)
-
             current_timestamp = int(homework['current_date'])
         except TelegramError as error:
             logging.error(TelegramError, f'Сбой в работе программы: {error}')
             send_message(bot, f'Cбой в программе {error} \U0001F4CC')
             logging.info('Сообщение ошибке успешно отправлено.')
-        except KeyError:
-            logging.error(KeyError)
-        except ValueError:
-            logging.critical(ValueError)
-            sys.exit()
-        except HTTPError or ConnectionRefusedError as error:
+        except ValueError as error:
+            logging.critical(error)
+            message = error
+            sys.exit(1)
+        except JSONEncodeError or KeyError or IncorrectApiResponse as error:
             logging.error(error)
-        except requests.JSONDecodeError:
-            logging.error(requests.JSONDecodeError,
-                          'Не удалось привести вывод API к формату JSON')
+            message = error
         else:
+            send_message(bot, message)
             logging.info('Все отправилось - прорамма выполнилась')
         finally:
             time.sleep(RETRY_TIME)
