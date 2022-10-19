@@ -24,3 +24,9 @@ class TelegramError(TelegramError):
     """Ошибка при взаимодействии с API телеграма."""
 
     pass
+
+
+class RequestException(RequestException):
+    """Ошибка вызова response."""
+
+    pass

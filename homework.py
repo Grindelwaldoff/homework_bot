@@ -11,7 +11,8 @@ from telegram import Bot
 from dotenv import load_dotenv
 
 from exceptions import (
-    JSONEncodeError, IncorrectApiResponse, HTTPError, TelegramError
+    JSONEncodeError, IncorrectApiResponse,
+    HTTPError, TelegramError, RequestException
 )
 
 
@@ -58,45 +59,54 @@ def get_api_answer(current_timestamp: int) -> Dict:
     response = requests.get(ENDPOINT, headers=HEADERS, params=params)
 
     if response.status_code != HTTPStatus.OK:
-        raise HTTPError('Запрос не удался')
+        raise HTTPError('Запрос не удался.')
 
     return response.json()
 
 
+# gut
 def check_response(response: Dict) -> List[dict]:
     """Проверка запроса к API."""
-    if response['homeworks'] is None:
-        raise KeyError('Ответ от API некорректен')
+    if not isinstance(response, dict):
+        raise IncorrectApiResponse('API вернуло не словарь.')
 
-    if not isinstance(response, Dict):
-        raise IncorrectApiResponse('API вернуло не словарь')
+    if response['homeworks'] is None:
+        raise KeyError('Ответ от API вернул 0, у меня 0 на счету.')
 
     if 'homeworks' not in response.keys():
         raise IncorrectApiResponse(
-            'В ответе API не были получены списки домашних работ'
+            'В ответе API не были получены списки домашних работ.'
         )
 
-    if not isinstance(response['homeworks'], List):
+    if not isinstance(response['homeworks'], list):
         raise IncorrectApiResponse(
-            'Под ключом homeworks не список'
+            'Под ключом homeworks не список.'
         )
+
+    if not response['homeworks'].get('current_date'):
+        raise IncorrectApiResponse('В ответе API не было даты.')
 
     return response['homeworks']
 
 
+# gut
 def parse_status(homework: json) -> str:
     """Получение статуса проверки домашней работы."""
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
 
+    if homework_name is None:
+        raise KeyError('У девочки нет имени... ой то-есть дз.')
+
     if homework_status not in HOMEWORK_STATES:
-        raise KeyError('Такого статуса не существует')
+        raise KeyError(f'{homework_status} - такого статуса не существует')
 
     verdict = HOMEWORK_STATES.get(homework_status)
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
+# gut
 def emoji(status: str) -> str:
     """Возвращает для каждого статуса свой смайлик."""
     emojis = {
@@ -107,11 +117,11 @@ def emoji(status: str) -> str:
     return emojis[status]
 
 
+# gut
 def send_message(bot: Bot, message: Dict) -> None:
     """Отправка итогового сообщения со всей информацией."""
     try:
         # bot.send_message(TELEGRAM_CHAT_ID, text=message)
-        print('Все ок')
         logging.info('Сообщение отправлено.')
     except TelegramError:
         raise TelegramError('В ответе содержатся неизвестные символы.')
@@ -138,7 +148,12 @@ def main() -> None:
 
     while True:
         try:
-            response = get_api_answer(current_timestamp)
+            try:
+                response = get_api_answer(current_timestamp)
+            except RequestException as error:
+                logging.critical(error, __doc__)
+                message = error
+
             homework = check_response(response)[0]
             new_status = parse_status(homework)
 
@@ -160,7 +175,9 @@ def main() -> None:
             logging.critical(error)
             message = error
             sys.exit(1)
-        except JSONEncodeError or KeyError or IncorrectApiResponse as error:
+        except (
+            JSONEncodeError or KeyError or IncorrectApiResponse or HTTPError
+        ) as error:
             logging.error(error)
             message = error
         else:
