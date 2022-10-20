@@ -1,4 +1,4 @@
-from requests import RequestException
+from requests.exceptions import RequestException
 from telegram import TelegramError
 
 

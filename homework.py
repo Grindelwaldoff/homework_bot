@@ -41,14 +41,9 @@ def check_tokens() -> bool:
         'TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID,
         'TELEGRAM_TOKEN': TELEGRAM_TOKEN
     }
-    res = ''
 
     if not all(check_list.values()):
-        for key, value in check_list.items():
-            if value is None:
-                res += ' ' + key
-
-        raise ValueError(f'Токен/ы {res} не задан/ы.')
+        return False
 
     return True
 
@@ -58,33 +53,39 @@ def get_api_answer(current_timestamp: int) -> Dict:
     params = {'from_date': current_timestamp}
     response = requests.get(ENDPOINT, headers=HEADERS, params=params)
 
+    if not isinstance(response, Dict):
+        raise IncorrectApiResponse('API вернуло не словарь.')
+
+    if not response or response == {}:
+        raise RequestException('API сервиса не отвечает.')
+
     if response.status_code != HTTPStatus.OK:
         raise HTTPError('Запрос не удался.')
 
-    return response.json()
+    try:
+        return response.json()
+    except JSONEncodeError:
+        raise JSONEncodeError('Ответ от API нельзя перевести в json.')
 
 
 # gut
 def check_response(response: Dict) -> List[dict]:
     """Проверка запроса к API."""
-    if not isinstance(response, dict):
-        raise IncorrectApiResponse('API вернуло не словарь.')
 
-    if response['homeworks'] is None:
-        raise KeyError('Ответ от API вернул 0, у меня 0 на счету.')
+    print(response)
 
     if 'homeworks' not in response.keys():
         raise IncorrectApiResponse(
             'В ответе API не были получены списки домашних работ.'
         )
 
-    if not isinstance(response['homeworks'], list):
-        raise IncorrectApiResponse(
-            'Под ключом homeworks не список.'
-        )
+    # if 'current_date' not in response.keys():
+        # raise IncorrectApiResponse(
+        #     'В ответе API не было полученно актуальное время.'
+        # )
 
-    if not response['homeworks'].get('current_date'):
-        raise IncorrectApiResponse('В ответе API не было даты.')
+    if response['homeworks'][0] is None:
+        raise IncorrectApiResponse('Ответ от API пуст.')
 
     return response['homeworks']
 
@@ -95,11 +96,11 @@ def parse_status(homework: json) -> str:
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
 
-    if homework_name is None:
-        raise KeyError('У девочки нет имени... ой то-есть дз.')
+    if homework_name == '':
+        raise KeyError('У девочки нет имени... ой, то-есть у дз.')
 
     if homework_status not in HOMEWORK_STATES:
-        raise KeyError(f'{homework_status} - такого статуса не существует')
+        raise KeyError(f'{homework_status} - такого статуса нет.')
 
     verdict = HOMEWORK_STATES.get(homework_status)
 
@@ -141,9 +142,11 @@ def main() -> None:
             'info:%(message)s \n')
     )
 
-    check_tokens()
+    if not check_tokens():
+        raise ValueError('Ошибка инициализации Токенов.')
+
     bot = Bot(token=TELEGRAM_TOKEN)
-    current_timestamp = int(time.time())
+    current_timestamp = int(0)
     status = None
 
     while True:
@@ -154,8 +157,8 @@ def main() -> None:
                 logging.critical(error, __doc__)
                 message = error
 
-            homework = check_response(response)[0]
-            new_status = parse_status(homework)
+            homework = check_response(response)
+            new_status = parse_status(homework[0])
 
             if status != new_status:
                 status = new_status
@@ -166,9 +169,9 @@ def main() -> None:
                     f'{homework.get("reviewer_comment")} \U0001F4DC'
                 )
 
-            current_timestamp = int(homework['current_date'])
+            current_timestamp = homework['date_updated']
         except TelegramError as error:
-            logging.error(TelegramError, f'Сбой в работе программы: {error}')
+            logging.error(error, f'Сбой в работе программы: {error}')
             send_message(bot, f'Cбой в программе {error} \U0001F4CC')
             logging.info('Сообщение ошибке успешно отправлено.')
         except ValueError as error:
@@ -181,7 +184,7 @@ def main() -> None:
             logging.error(error)
             message = error
         else:
-            send_message(bot, message)
+            send_message(bot, message + ' \U0001F4CC')
             logging.info('Все отправилось - прорамма выполнилась')
         finally:
             time.sleep(RETRY_TIME)
