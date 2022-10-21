@@ -151,8 +151,8 @@ def main() -> None:
                 logging.critical(error, __doc__)
                 message = error
 
-            homework = check_response(response)
-            new_status = parse_status(homework[0])
+            homework = check_response(response)[0]
+            new_status = parse_status(homework)
 
             if status != new_status:
                 status = new_status
