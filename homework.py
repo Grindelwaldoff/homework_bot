@@ -18,6 +18,8 @@ from exceptions import (
 
 load_dotenv()
 
+BASE_DIR = os.path.dirname(__file__)
+
 PRACTICUM_TOKEN = os.getenv('TOKEN_YANDEX')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('CHAT_ID')
@@ -127,7 +129,7 @@ def main() -> None:
     """Основная логика работы бота."""
     logging.basicConfig(
         level=logging.INFO,
-        filename='./main.log',
+        filename=os.path.join(BASE_DIR, 'main.log'),
         filemode='w',
         format=(
             'line:%(lineno)s \n'
