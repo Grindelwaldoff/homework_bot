@@ -140,7 +140,7 @@ def main() -> None:
         raise ValueError('Ошибка инициализации Токенов.')
 
     bot = Bot(token=TELEGRAM_TOKEN)
-    current_timestamp = int(0)
+    current_timestamp = int(time.time())
     status = None
 
     while True:
