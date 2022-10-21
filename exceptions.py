@@ -8,12 +8,6 @@ class JSONEncodeError(RequestException):
     pass
 
 
-class IncorrectApiResponse(Exception):
-    """Ошибка в выводе резльтата от API."""
-
-    pass
-
-
 class HTTPError(RequestException):
     """Ошибка - не удалось получить ответ от API."""
 
