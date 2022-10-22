@@ -3,10 +3,10 @@ import sys
 import time
 import logging
 import json
-from typing import Dict, List
+from typing import List
+from http import HTTPStatus
 
 import requests
-from http import HTTPStatus
 from telegram import Bot
 from dotenv import load_dotenv
 
@@ -37,28 +37,29 @@ HOMEWORK_STATES = {
 
 def check_tokens() -> bool:
     """Проверка всех токенов на валидность."""
-    check_list = {
-        'PRACTICUM_TOKEN': PRACTICUM_TOKEN,
-        'TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID,
-        'TELEGRAM_TOKEN': TELEGRAM_TOKEN
-    }
-
-    if not all(check_list.values()):
+    check_list = (PRACTICUM_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_TOKEN)
+    if not all(check_list):
         return False
 
     return True
 
 
-def get_api_answer(current_timestamp: int) -> Dict:
+def get_api_answer(current_timestamp: int) -> dict:
     """Получение ответа от API."""
     params = {'from_date': current_timestamp}
-    response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+
+    try:
+        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+    except RequestException:
+        raise RequestException(
+            'Не удалось сделать запрос к API. Сервер не доступен.'
+        )
 
     if not response or response == {}:
         raise TypeError('API сервиса не отвечает.')
 
     if response.status_code != HTTPStatus.OK:
-        raise HTTPError('Запрос не удался.')
+        raise HTTPError('Сервер сервиса не дал ответа. Error 500.')
 
     try:
         return response.json()
@@ -66,9 +67,9 @@ def get_api_answer(current_timestamp: int) -> Dict:
         raise JSONEncodeError('Ответ от API нельзя перевести в json.')
 
 
-def check_response(response: Dict) -> List[dict]:
+def check_response(response: dict) -> List[dict]:
     """Проверка запроса к API."""
-    if not isinstance(response, Dict):
+    if not isinstance(response, dict):
         raise TypeError('API вернуло не словарь.')
 
     if 'homeworks' not in response.keys():
@@ -76,15 +77,7 @@ def check_response(response: Dict) -> List[dict]:
             'В ответе API не были получены списки домашних работ.'
         )
 
-    if 'current_date' not in response.keys():
-        raise KeyError(
-            'В ответе API не было полученно актуальное время.'
-        )
-
-    if response['homeworks'][0] is None:
-        raise KeyError('Ответ от API пуст.')
-
-    if isinstance(response['homeworks'][0], list):
+    if isinstance(response['homeworks'], dict):
         raise TypeError('Дз получено не в виде списка.')
 
     return response['homeworks']
@@ -95,7 +88,7 @@ def parse_status(homework: json) -> str:
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
 
-    if homework_name == '':
+    if homework_name is None:
         raise KeyError('У девочки нет имени... ой, то-есть у дз.')
 
     if homework_status not in HOMEWORK_STATES:
@@ -116,13 +109,14 @@ def emoji(status: str) -> str:
     return emojis[status]
 
 
-def send_message(bot: Bot, message: Dict) -> None:
+def send_message(bot: Bot, message: dict) -> None:
     """Отправка итогового сообщения со всей информацией."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, text=message)
-        logging.info('Сообщение отправлено.')
     except TelegramError:
         raise TelegramError('В ответе содержатся неизвестные символы.')
+    else:
+        logging.info('Сообщение отправлено.')
 
 
 def main() -> None:
@@ -139,7 +133,8 @@ def main() -> None:
     )
 
     if not check_tokens():
-        raise ValueError('Ошибка инициализации Токенов.')
+        logging.critical('Ошибка с инициализацией Токенов.')
+        sys.exit('Ошибка, токены не заданы или заданы, но неправильно.')
 
     bot = Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
@@ -167,15 +162,11 @@ def main() -> None:
 
             current_timestamp = homework['date_updated']
         except TelegramError as error:
-            logging.error(error, f'Сбой в работе программы: {error}')
-            send_message(bot, f'Cбой в программе {error} \U0001F4CC')
-            logging.info('Сообщение ошибке успешно отправлено.')
-        except ValueError as error:
-            logging.critical(error)
-            message = error
-            sys.exit(1)
+            message = f'Cбой в программе {error}'
+            logging.error(error, message)
+            logging.info('Сообщение об ошибке успешно отправлено.')
         except (
-            JSONEncodeError or KeyError or TypeError or HTTPError
+            JSONEncodeError, KeyError, TypeError, HTTPError
         ) as error:
             logging.error(error)
             message = error
