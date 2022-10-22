@@ -142,12 +142,7 @@ def main() -> None:
 
     while True:
         try:
-            try:
-                response = get_api_answer(current_timestamp)
-            except RequestException as error:
-                logging.critical(error, __doc__)
-                message = error
-
+            response = get_api_answer(current_timestamp)
             homework = check_response(response)[0]
             new_status = parse_status(homework)
 
