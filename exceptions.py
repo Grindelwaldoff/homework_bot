@@ -20,7 +20,7 @@ class TelegramError(TelegramError):
     pass
 
 
-class RequestException(RequestException):
+class RequestException(ConnectionAbortedError):
     """Ошибка вызова response."""
 
     pass

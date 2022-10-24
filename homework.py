@@ -37,8 +37,7 @@ HOMEWORK_STATES = {
 
 def check_tokens() -> bool:
     """Проверка всех токенов на валидность."""
-    check_list = (PRACTICUM_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_TOKEN)
-    if not all(check_list):
+    if not all([PRACTICUM_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_TOKEN]):
         return False
 
     return True
@@ -56,10 +55,12 @@ def get_api_answer(current_timestamp: int) -> dict:
         )
 
     if not response or response == {}:
-        raise TypeError('API сервиса не отвечает.')
+        raise TimeoutError('API сервиса не отвечает.')
 
     if response.status_code != HTTPStatus.OK:
-        raise HTTPError('Сервер сервиса не дал ответа. Error 500.')
+        raise HTTPError(
+            f'Сервер сервиса не дал ответа. {response.status_code}.'
+        )
 
     try:
         return response.json()
@@ -76,6 +77,9 @@ def check_response(response: dict) -> List[dict]:
         raise KeyError(
             'В ответе API не были получены списки домашних работ.'
         )
+
+    if 'current_date' not in response.keys():
+        logging.error('В ответе от API не было даты.')
 
     if isinstance(response['homeworks'], dict):
         raise TypeError('Дз получено не в виде списка.')
@@ -155,11 +159,10 @@ def main() -> None:
                     f'{homework.get("reviewer_comment")} \U0001F4DC'
                 )
 
-            current_timestamp = homework['date_updated']
+            current_timestamp = response['current_date']
         except TelegramError as error:
             message = f'Cбой в программе {error}'
             logging.error(error, message)
-            logging.info('Сообщение об ошибке успешно отправлено.')
         except (
             JSONEncodeError, KeyError, TypeError, HTTPError
         ) as error:
