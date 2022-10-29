@@ -7,12 +7,12 @@ from typing import List
 from http import HTTPStatus
 
 import requests
-from telegram import Bot
+from telegram import Bot, TelegramError
 from dotenv import load_dotenv
 
 from exceptions import (
-    JSONEncodeError, HTTPError,
-    TelegramError, RequestException
+    CheckResponseLogError,
+    MyTelegramError, RequestException
 )
 
 
@@ -37,10 +37,7 @@ HOMEWORK_STATES = {
 
 def check_tokens() -> bool:
     """Проверка всех токенов на валидность."""
-    if not all([PRACTICUM_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_TOKEN]):
-        return False
-
-    return True
+    return all((PRACTICUM_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_TOKEN))
 
 
 def get_api_answer(current_timestamp: int) -> dict:
@@ -49,23 +46,13 @@ def get_api_answer(current_timestamp: int) -> dict:
 
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-    except RequestException:
-        raise RequestException(
-            'Не удалось сделать запрос к API. Сервер не доступен.'
-        )
-
-    if not response or response == {}:
-        raise TimeoutError('API сервиса не отвечает.')
-
-    if response.status_code != HTTPStatus.OK:
-        raise HTTPError(
-            f'Сервер сервиса не дал ответа. {response.status_code}.'
-        )
-
-    try:
+        if response.status_code != HTTPStatus.OK:
+            raise RequestException(
+                f'Сервер сервиса не дал ответа. {response.status_code}.'
+            )
         return response.json()
-    except JSONEncodeError:
-        raise JSONEncodeError('Ответ от API нельзя перевести в json.')
+    except requests.RequestException as error:
+        raise RequestException(error)
 
 
 def check_response(response: dict) -> List[dict]:
@@ -78,11 +65,14 @@ def check_response(response: dict) -> List[dict]:
             'В ответе API не были получены списки домашних работ.'
         )
 
-    if 'current_date' not in response.keys():
-        logging.error('В ответе от API не было даты.')
-
-    if isinstance(response['homeworks'], dict):
+    if isinstance(response['homeworks'], list):
         raise TypeError('Дз получено не в виде списка.')
+
+    if ('current_date' not in response.keys()
+            or not isinstance(response['current_date'], int)):
+        raise CheckResponseLogError(
+            'В ответе API не была получена дата.'
+        )
 
     return response['homeworks']
 
@@ -118,7 +108,7 @@ def send_message(bot: Bot, message: dict) -> None:
     try:
         bot.send_message(TELEGRAM_CHAT_ID, text=message)
     except TelegramError:
-        raise TelegramError('В ответе содержатся неизвестные символы.')
+        raise MyTelegramError('Ошибка в заимодействии с API ТГ.')
     else:
         logging.info('Сообщение отправлено.')
 
@@ -147,30 +137,27 @@ def main() -> None:
     while True:
         try:
             response = get_api_answer(current_timestamp)
-            homework = check_response(response)[0]
-            new_status = parse_status(homework)
+            homework_list = check_response(response)
+            if len(homework_list) != 0:
+                new_status = parse_status(homework_list[0])
 
             if status != new_status:
                 status = new_status
                 message = (
-                    f'{status} {emoji(homework["status"])} \n'
-                    f'Статус: {homework.get("status")} \U0001F6A9 \n'
+                    f'{status} {emoji(homework_list["status"])} \n'
+                    f'Статус: {homework_list.get("status")} \U0001F6A9 \n'
                     'Комментарий:'
-                    f'{homework.get("reviewer_comment")} \U0001F4DC'
+                    f'{homework_list.get("reviewer_comment")} \U0001F4DC'
                 )
-
+                send_message(bot, message)
             current_timestamp = response['current_date']
-        except TelegramError as error:
-            message = f'Cбой в программе {error}'
-            logging.error(error, message)
-        except (
-            JSONEncodeError, KeyError, TypeError, HTTPError
-        ) as error:
+        except CheckResponseLogError as error:
             logging.error(error)
-            message = error
+        except Exception as error:
+            message = f'Cбой в программе {error} \U0001F4CC'
+            logging.error(error)
         else:
-            send_message(bot, message + ' \U0001F4CC')
-            logging.info('Все отправилось - прорамма выполнилась')
+            send_message(bot, message)
         finally:
             time.sleep(RETRY_TIME)
 

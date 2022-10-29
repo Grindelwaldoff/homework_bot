@@ -1,26 +1,16 @@
-from requests.exceptions import RequestException
-from telegram import TelegramError
-
-
-class JSONEncodeError(RequestException):
-    """Ошибка в выводе результата в JSON формат."""
+class CheckResponseLogError(KeyError):
+    """Параметр current_date не был получен в ответе от API."""
 
     pass
 
 
-class HTTPError(RequestException):
-    """Ошибка - не удалось получить ответ от API."""
-
-    pass
-
-
-class TelegramError(TelegramError):
+class MyTelegramError(Exception):
     """Ошибка при взаимодействии с API телеграма."""
 
     pass
 
 
-class RequestException(ConnectionAbortedError):
+class RequestException(ConnectionError):
     """Ошибка вызова response."""
 
     pass
