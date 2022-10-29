@@ -65,7 +65,7 @@ def check_response(response: dict) -> List[dict]:
             'В ответе API не были получены списки домашних работ.'
         )
 
-    if isinstance(response['homeworks'], list):
+    if not isinstance(response['homeworks'], list):
         raise TypeError('Дз получено не в виде списка.')
 
     if ('current_date' not in response.keys()
