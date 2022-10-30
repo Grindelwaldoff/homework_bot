@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from exceptions import (
     CheckResponseLogError,
-    MyTelegramError, RequestException
+    CustomTelegramError, CustomRequestException
 )
 
 
@@ -47,12 +47,15 @@ def get_api_answer(current_timestamp: int) -> dict:
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
         if response.status_code != HTTPStatus.OK:
-            raise RequestException(
+            raise CustomRequestException(
                 f'Сервер сервиса не дал ответа. {response.status_code}.'
             )
         return response.json()
     except requests.RequestException as error:
-        raise RequestException(error)
+        raise CustomRequestException(
+            error,
+            'Ошибка при получении ответа от API.'
+        )
 
 
 def check_response(response: dict) -> List[dict]:
@@ -68,8 +71,7 @@ def check_response(response: dict) -> List[dict]:
     if not isinstance(response['homeworks'], list):
         raise TypeError('Дз получено не в виде списка.')
 
-    if ('current_date' not in response.keys()
-            or not isinstance(response['current_date'], int)):
+    if 'current_date' not in response.keys():
         raise CheckResponseLogError(
             'В ответе API не была получена дата.'
         )
@@ -108,7 +110,7 @@ def send_message(bot: Bot, message: dict) -> None:
     try:
         bot.send_message(TELEGRAM_CHAT_ID, text=message)
     except TelegramError:
-        raise MyTelegramError('Ошибка в заимодействии с API ТГ.')
+        raise CustomTelegramError('Ошибка в заимодействии с API ТГ.')
     else:
         logging.info('Сообщение отправлено.')
 
@@ -156,7 +158,6 @@ def main() -> None:
         except Exception as error:
             message = f'Cбой в программе {error} \U0001F4CC'
             logging.error(error)
-        else:
             send_message(bot, message)
         finally:
             time.sleep(RETRY_TIME)
