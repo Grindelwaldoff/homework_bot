@@ -142,6 +142,8 @@ def main() -> None:
             homework_list = check_response(response)
             if len(homework_list) != 0:
                 new_status = parse_status(homework_list[0])
+            else:
+                new_status = status
 
             if status != new_status:
                 status = new_status
