@@ -146,7 +146,8 @@ def main() -> None:
             response = get_api_answer(current_timestamp)
             homework_list = check_response(response)
             if len(homework_list) != 0:
-                new_status = parse_status(homework_list[0])
+                homework_list = homework_list[0]
+                new_status = parse_status(homework_list)
             else:
                 new_status = status
 
