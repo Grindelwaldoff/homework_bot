@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 from exceptions import (
     CheckResponseLogError,
+    LogError,
     SendMessageError, APIError
 )
 
@@ -76,7 +77,7 @@ def check_response(response: dict) -> List[dict]:
             'В ответе API не была получена дата.'
         )
 
-    if isinstance('current_date', float):
+    if not isinstance('current_date', float):
         raise CheckResponseLogError(
             'В ответе API была получена дата в неверном формате.'
         )
@@ -159,14 +160,17 @@ def main() -> None:
                     'Комментарий:'
                     f'{homework_list.get("reviewer_comment")} \U0001F4DC'
                 )
-                send_message(bot, message)
             current_timestamp = response['current_date']
-        except (CheckResponseLogError, SendMessageError) as error:
+        except LogError as error:
             logging.error(error)
         except Exception as error:
             message = f'Cбой в программе {error} \U0001F4CC'
             logging.error(error)
-            send_message(bot, message)
+        else:
+            try:
+                send_message(bot, message)
+            except LogError as error:
+                logging.error(error, 'Не удалось отправить сообщение в ТГ')
         finally:
             time.sleep(RETRY_TIME)
 
