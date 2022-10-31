@@ -4,13 +4,13 @@ class CheckResponseLogError(KeyError):
     pass
 
 
-class CustomTelegramError(Exception):
+class SendMessageError(Exception):
     """Ошибка при взаимодействии с API телеграма."""
 
     pass
 
 
-class CustomRequestException(ConnectionError):
+class APIError(ConnectionError):
     """Ошибка вызова response."""
 
     pass

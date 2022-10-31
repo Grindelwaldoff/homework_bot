@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from exceptions import (
     CheckResponseLogError,
-    CustomTelegramError, CustomRequestException
+    SendMessageError, APIError
 )
 
 
@@ -47,12 +47,12 @@ def get_api_answer(current_timestamp: int) -> dict:
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
         if response.status_code != HTTPStatus.OK:
-            raise CustomRequestException(
+            raise APIError(
                 f'Сервер сервиса не дал ответа. {response.status_code}.'
             )
         return response.json()
     except requests.RequestException as error:
-        raise CustomRequestException(
+        raise APIError(
             error,
             'Ошибка при получении ответа от API.'
         )
@@ -74,6 +74,11 @@ def check_response(response: dict) -> List[dict]:
     if 'current_date' not in response.keys():
         raise CheckResponseLogError(
             'В ответе API не была получена дата.'
+        )
+
+    if not isinstance('current_date', int):
+        raise CheckResponseLogError(
+            'В ответе API была получена дата в неверном формате.'
         )
 
     return response['homeworks']
@@ -110,7 +115,7 @@ def send_message(bot: Bot, message: dict) -> None:
     try:
         bot.send_message(TELEGRAM_CHAT_ID, text=message)
     except TelegramError:
-        raise CustomTelegramError('Ошибка в заимодействии с API ТГ.')
+        raise SendMessageError('Ошибка в заимодействии с API ТГ.')
     else:
         logging.info('Сообщение отправлено.')
 
@@ -155,7 +160,7 @@ def main() -> None:
                 )
                 send_message(bot, message)
             current_timestamp = response['current_date']
-        except CheckResponseLogError as error:
+        except (CheckResponseLogError, SendMessageError) as error:
             logging.error(error)
         except Exception as error:
             message = f'Cбой в программе {error} \U0001F4CC'
