@@ -77,7 +77,7 @@ def check_response(response: dict) -> List[dict]:
             'В ответе API не была получена дата.'
         )
 
-    if not isinstance('current_date', float):
+    if not isinstance(response['current_date'], int):
         raise CheckResponseLogError(
             'В ответе API была получена дата в неверном формате.'
         )
